@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BizFinder AI — App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    #map { width: 100%; height: 100%; }
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: #e4e4e7; border-radius: 4px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+  </style>
+</head>
+<body class="bg-gray-50 overflow-hidden" style="height:100vh;">
+
+  <div class="flex flex-col h-screen">
+
+    <!-- TOP BAR -->
+    <header class="h-14 border-b border-gray-200 bg-white flex items-center px-4 gap-3 shrink-0 shadow-sm z-10">
+      <div class="flex items-center gap-2">
+        <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <h1 class="font-bold text-lg tracking-tight">BizFinder<span class="text-green-500"> + Cold Email AI</span></h1>
+      </div>
+      <div class="flex-1"></div>
+      <a href="dashboard.html" class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+        Dashboard
+      </a>
+      <span id="usage-badge" class="text-xs bg-green-50 border border-green-200 text-green-700 font-semibold px-3 py-1.5 rounded-lg">Free · 15 searches left</span>
+      <button id="export-btn" onclick="exportCSV()" class="flex items-center gap-1.5 text-sm border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export CSV
+      </button>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+
+      <!-- SIDEBAR -->
+      <aside class="w-80 bg-white border-r border-gray-200 flex flex-col h-full z-20">
+        <div class="p-4 space-y-3 shrink-0 border-b border-gray-100">
+
+          <!-- Location input -->
+          <div>
+            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block">📍 Location</label>
+            <div class="flex gap-2">
+              <input id="location-input" type="text" placeholder="e.g. Mumbai, Bandra" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
+              <button onclick="setLocation()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-2 rounded-lg text-sm font-semibold transition">Go</button>
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div>
+            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block">🔍 Search Businesses</label>
+            <div class="flex gap-2">
+              <input id="search-input" type="text" placeholder="e.g. restaurant, gym, salon" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" onkeydown="if(event.key==='Enter')doSearch()" />
+              <button onclick="doSearch()" id="search-btn" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold transition">
+                Search
+              </button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div id="stats-bar" class="hidden grid grid-cols-3 gap-2">
+            <div class="bg-gray-50 rounded-lg p-2 text-center">
+              <div id="stat-total" class="text-lg font-bold">0</div>
+              <div class="text-xs text-gray-400">Found</div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-2 text-center">
+              <div id="stat-emails" class="text-lg font-bold">0</div>
+              <div class="text-xs text-gray-400">Emails</div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-2 text-center">
+              <div id="stat-selected" class="text-lg font-bold">0</div>
+              <div class="text-xs text-gray-400">Selected</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Business list -->
+        <div class="flex-1 overflow-y-auto sidebar-scroll">
+          <div id="biz-list-empty" class="flex flex-col items-center justify-center h-full text-center px-6">
+            <svg class="h-10 w-10 text-gray-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+            <p class="text-sm font-semibold text-gray-400">No businesses yet</p>
+            <p class="text-xs text-gray-300 mt-1">Set a location and search above</p>
+          </div>
+          <div id="biz-list" class="p-3 space-y-2 hidden"></div>
+        </div>
+
+        <!-- Generate emails button -->
+        <div id="email-bar" class="hidden p-3 border-t border-gray-100">
+          <button onclick="generateEmails()" class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <span id="email-btn-text">Generate Emails</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- MAP -->
+      <main class="flex-1 relative">
+        <div id="map" class="absolute inset-0"></div>
+        <div id="map-hint" class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 shadow pointer-events-none">
+          📍 Click the map to set location, or type in the sidebar
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- EMAIL MODAL -->
+  <div id="email-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-lg font-bold">Generated Cold Emails</h2>
+        <button onclick="closeEmailModal()" class="text-gray-400 hover:text-gray-700">✕</button>
+      </div>
+      <div id="email-list" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <script>
+    let map, marker, circle;
+    let businesses = [];
+    let selectedIds = new Set();
+    let currentLat = 20.5937, currentLng = 78.9629;
+    let mapMarkers = [];
+
+    // ✅ APNI GOOGLE PLACES API KEY YAHAN DAALEIN
+    // ✅ Backend URL — Vercel deploy ke baad apna URL daalo
+    const BACKEND_URL = 'https://your-project.vercel.app';
+
+    // Init map
+    map = L.map('map').setView([currentLat, currentLng], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    map.on('click', function(e) {
+      currentLat = e.latlng.lat;
+      currentLng = e.latlng.lng;
+      updateMapMarker();
+      document.getElementById('map-hint').style.display = 'none';
+    });
+
+    function updateMapMarker() {
+      if (marker) map.removeLayer(marker);
+      if (circle) map.removeLayer(circle);
+      marker = L.marker([currentLat, currentLng]).addTo(map);
+      circle = L.circle([currentLat, currentLng], { radius: 2000, color: '#22c55e', fillOpacity: 0.07 }).addTo(map);
+      map.setView([currentLat, currentLng], 14);
+    }
+
+    async function setLocation() {
+      const q = document.getElementById('location-input').value.trim();
+      if (!q) return;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+      const data = await res.json();
+      if (data.length > 0) {
+        currentLat = parseFloat(data[0].lat);
+        currentLng = parseFloat(data[0].lon);
+        updateMapMarker();
+        document.getElementById('map-hint').style.display = 'none';
+      } else {
+        alert('Location not found. Try a different name.');
+      }
+    }
+
+    // ─── Google Places: Nearby Search ───────────────────────────────────────
+    // ─── Secure Backend API Calls (API key frontend pe nahi) ─────────────────
+    async function fetchNearbyPlaces(keyword) {
+      const res = await fetch(`${BACKEND_URL}/api/places?lat=${currentLat}&lng=${currentLng}&keyword=${encodeURIComponent(keyword)}&radius=2000`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Backend error');
+      }
+      const data = await res.json();
+      return data.results || [];
+    }
+
+    // ─── Google Places: Place Details (phone, website) ───────────────────────
+    async function fetchPlaceDetails(placeId) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/details?place_id=${placeId}`);
+        if (!res.ok) return {};
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function doSearch() {
+      const q = document.getElementById('search-input').value.trim();
+      if (!q) { alert('Enter a business type to search.'); return; }
+
+      const btn = document.getElementById('search-btn');
+      btn.innerHTML = '<svg class="h-4 w-4 spin inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Searching...';
+      btn.disabled = true;
+
+      try {
+        // Step 1: Nearby search se list lao
+        const places = await fetchNearbyPlaces(q);
+
+        if (places.length === 0) {
+          alert('❌ Koi business nahi mila is area mein. Location change karke try karein.');
+          btn.innerHTML = 'Search';
+          btn.disabled = false;
+          return;
+        }
+
+        // Step 2: Top 10 results ke liye details fetch karo (phone, website)
+        businesses = [];
+        const topPlaces = places.slice(0, 10);
+
+        for (let i = 0; i < topPlaces.length; i++) {
+          const pl = topPlaces[i];
+          btn.innerHTML = `<svg class="h-4 w-4 spin inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> ${i+1}/${topPlaces.length}`;
+
+          const details = await fetchPlaceDetails(pl.place_id);
+
+          businesses.push({
+            id: i,
+            name: details.name || pl.name,
+            address: details.formatted_address || pl.vicinity || 'Address not available',
+            phone: details.formatted_phone_number || '',
+            website: details.website || '',
+            email: details.email || '',   // Google Places rarely returns email
+            category: pl.types?.[0]?.replace(/_/g, ' ') || q,
+            rating: pl.rating || '',
+            totalRatings: pl.user_ratings_total || 0,
+            lat: pl.geometry?.location?.lat,
+            lng: pl.geometry?.location?.lng,
+            placeId: pl.place_id,
+          });
+        }
+
+      } catch(e) {
+        console.error(e);
+        alert('❌ API Error: ' + e.message + '\n\nCheck karein:\n1. API Key sahi hai?\n2. Places API enable hai Google Console mein?');
+        btn.innerHTML = 'Search';
+        btn.disabled = false;
+        return;
+      }
+
+      renderBusinesses();
+      plotOnMap();
+      btn.innerHTML = 'Search';
+      btn.disabled = false;
+    }
+
+    function renderBusinesses() {
+      const list = document.getElementById('biz-list');
+      const empty = document.getElementById('biz-list-empty');
+      const statsBar = document.getElementById('stats-bar');
+      list.innerHTML = '';
+      list.classList.remove('hidden');
+      empty.classList.add('hidden');
+      statsBar.classList.remove('hidden');
+      statsBar.className = 'grid grid-cols-3 gap-2 mx-4 my-2';
+
+      document.getElementById('stat-total').textContent = businesses.length;
+      document.getElementById('stat-emails').textContent = businesses.filter(b => b.email).length;
+      document.getElementById('stat-selected').textContent = selectedIds.size;
+
+      businesses.forEach(b => {
+        const card = document.createElement('div');
+        const selected = selectedIds.has(b.id);
+        card.className = `rounded-xl border p-3 cursor-pointer transition ${selected ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white hover:border-gray-300'}`;
+        card.onclick = () => toggleSelect(b.id, card);
+        card.innerHTML = `
+          <div class="flex items-start gap-2">
+            <input type="checkbox" ${selected ? 'checked' : ''} class="mt-0.5 accent-green-500 shrink-0" />
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold text-sm text-gray-800 truncate">${b.name}</div>
+              <div class="text-xs text-gray-400 truncate mt-0.5">${b.address}</div>
+              ${b.rating ? `<div class="text-xs text-yellow-500 mt-0.5">⭐ ${b.rating} <span class="text-gray-400">(${b.totalRatings} reviews)</span></div>` : ''}
+              <div class="flex flex-wrap gap-1.5 mt-2">
+                ${b.phone ? `<span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">📞 ${b.phone}</span>` : ''}
+                ${b.email ? `<span class="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded">✉️ ${b.email}</span>` : ''}
+                ${b.website ? `<a href="${b.website}" target="_blank" onclick="event.stopPropagation()" class="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">🌐 website</a>` : ''}
+                ${b.placeId ? `<a href="https://maps.google.com/?cid=${b.placeId}" target="_blank" onclick="event.stopPropagation()" class="text-xs bg-red-50 text-red-500 px-1.5 py-0.5 rounded">📍 Maps</a>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+
+      updateEmailBar();
+    }
+
+    function toggleSelect(id, card) {
+      if (selectedIds.has(id)) {
+        selectedIds.delete(id);
+      } else {
+        selectedIds.add(id);
+      }
+      renderBusinesses();
+    }
+
+    function updateEmailBar() {
+      const bar = document.getElementById('email-bar');
+      const txt = document.getElementById('email-btn-text');
+      if (selectedIds.size > 0) {
+        bar.classList.remove('hidden');
+        txt.textContent = `Generate Emails (${selectedIds.size} selected)`;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    function plotOnMap() {
+      // Purane markers clear karo
+      mapMarkers.forEach(m => map.removeLayer(m));
+      mapMarkers = [];
+
+      businesses.forEach(b => {
+        if (b.lat && b.lng) {
+          const m = L.circleMarker([b.lat, b.lng], { radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.7 })
+            .addTo(map)
+            .bindPopup(`<b>${b.name}</b><br>${b.address}${b.phone ? '<br>📞 ' + b.phone : ''}${b.email ? '<br>✉️ ' + b.email : ''}${b.rating ? '<br>⭐ ' + b.rating : ''}`);
+          mapMarkers.push(m);
+        }
+      });
+    }
+
+    function generateEmails() {
+      const selected = businesses.filter(b => selectedIds.has(b.id));
+      const list = document.getElementById('email-list');
+      list.innerHTML = selected.map(b => `
+        <div class="border border-gray-200 rounded-xl p-4">
+          <div class="font-semibold text-sm mb-1">${b.name}</div>
+          <div class="text-xs text-gray-400 mb-3">${b.email || 'No email found'}</div>
+          <div class="bg-gray-50 rounded-lg p-3 text-sm space-y-2">
+            <div><span class="font-semibold text-gray-600">Subject:</span> Quick Question About ${b.name}'s Growth</div>
+            <div class="border-t border-gray-200 pt-2 text-gray-600 leading-relaxed">
+              Hi ${b.name} Team,<br><br>
+              I came across your ${b.category} business and was genuinely impressed. We help businesses like yours generate more leads and increase revenue through targeted outreach.<br><br>
+              Would you be open to a quick 10-minute call this week?<br><br>
+              Best regards,<br>
+              [Your Name]
+            </div>
+          </div>
+          ${b.email ? `<a href="mailto:${b.email}?subject=Quick Question About ${encodeURIComponent(b.name)}" class="mt-2 inline-flex items-center gap-1 text-xs text-green-600 hover:underline">✉️ Send via email</a>` : ''}
+        </div>
+      `).join('');
+      document.getElementById('email-modal').classList.remove('hidden');
+    }
+
+    function closeEmailModal() {
+      document.getElementById('email-modal').classList.add('hidden');
+    }
+
+    function exportCSV() {
+      if (businesses.length === 0) { alert('No businesses to export!'); return; }
+      const header = ['Name', 'Address', 'Phone', 'Email', 'Website', 'Category'];
+      const rows = businesses.map(b => [b.name, b.address, b.phone, b.email, b.website, b.category].map(v => `"${(v||'').replace(/"/g,'""')}"`));
+      const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'bizfinder_export.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
