@@ -1,0 +1,9 @@
+{
+  "name": "bizmaps-backend",
+  "version": "1.0.0",
+  "description": "BizFinder AI — Secure Google Places API Backend",
+  "type": "module",
+  "engines": {
+    "node": "20.x"
+  }
+}
